@@ -252,5 +252,5 @@ Possible future developments include:
 # Author
 
 Raoul Nicolae Marinescu  
-Bachelor’s Degree in Digital Communication  
+Bachelor’s Degree in Computer Science for Digital Communication
 University of Milan

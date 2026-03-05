@@ -126,3 +126,131 @@ Edges represent different types of relationships:
 ### 3. Graph export
 
 The final graph is exported as JSON:
+
+nodes: { id, label, type, depth }
+edges: { source, target, relation }
+
+These JSON files are then loaded by the frontend visualization.
+
+---
+
+# Visualization Approach
+
+Displaying the entire graph simultaneously would produce a visually overwhelming interface.
+
+To address this problem, the system adopts **progressive disclosure**, meaning that the graph expands only when users interact with specific nodes.
+
+Three main exploration modes are implemented:
+
+### Gene-centric mode
+
+Users start from a gene node and explore:
+
+- associated GO terms
+- associated HPO terms
+- ontology hierarchies
+
+### GO-centric mode
+
+Users start from a GO term and explore:
+
+- hierarchical relationships within the ontology
+- associated genes
+
+### HPO-centric mode
+
+Users start from a phenotype term and explore:
+
+- phenotype hierarchy
+- related genes
+- associated biological functions
+
+This interaction model allows users to gradually explore the graph without visual overload. :contentReference[oaicite:3]{index=3}
+
+---
+
+# Interface Design
+
+The interface was designed following usability principles from human–computer interaction research.
+
+Key design choices include:
+
+- progressive disclosure of information
+- hierarchical node layout
+- color-coded node types
+- zoom and pan navigation
+- contextual information panels
+- light/dark theme support
+
+Nodes are organized spatially according to their type and hierarchical depth to maintain visual clarity. :contentReference[oaicite:4]{index=4}
+
+---
+
+# Technologies Used
+
+Backend
+
+- Python
+- Pandas
+- CSV processing
+- JSON generation
+
+Frontend
+
+- HTML
+- CSS
+- JavaScript
+- D3.js
+
+Data Sources
+
+- Gene Ontology
+- Human Phenotype Ontology
+- gene–GO association matrices
+- gene–HPO association matrices
+
+---
+
+# Features
+
+- Interactive graph visualization
+- Multiple exploration modes
+- Ontology hierarchy reconstruction
+- Progressive graph expansion
+- Dynamic filtering of nodes
+- Node information tooltips
+- Light and dark interface modes
+
+---
+
+# Limitations
+
+The project focuses on data exploration rather than biological analysis.
+
+Limitations include:
+
+- no statistical or predictive analysis
+- scalability limitations for very large datasets
+- no integration with external biological databases
+
+These aspects represent potential directions for future improvements.
+
+---
+
+# Future Work
+
+Possible future developments include:
+
+- user testing and usability evaluation
+- integration with external biological data sources
+- support for larger datasets
+- personalized exploration views
+- saving and sharing exploration sessions
+
+---
+
+# Author
+
+Raoul Nicolae Marinescu  
+Bachelor’s Degree in Digital Communication  
+University of Milan

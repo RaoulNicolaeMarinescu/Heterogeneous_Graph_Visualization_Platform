@@ -1,6 +1,6 @@
 # Heterogeneous Graph Visualization Platform
 
-This project was developed as my Bachelor's thesis in Digital Communication at the University of Milan.
+This project was developed as my Bachelor's thesis in Computer Science for Digital Communication at the University of Milan.
 
 The goal of the project is to design and implement an interactive platform for the visualization and exploration of heterogeneous biological graphs representing relationships between genes, Gene Ontology (GO) terms, and Human Phenotype Ontology (HPO) terms.
 

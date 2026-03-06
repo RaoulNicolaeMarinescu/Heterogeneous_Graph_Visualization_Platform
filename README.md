@@ -28,7 +28,7 @@ The platform allows users to:
 
 The project focuses on **data visualization, usability, and interactive exploration of complex datasets** rather than biological analysis itself.
 
-The system was developed at **AnacletoLab – Department of Computer Science, University of Milan**. :contentReference[oaicite:0]{index=0}
+The system was developed at **AnacletoLab – Department of Computer Science, University of Milan**.
 
 ---
 
@@ -48,7 +48,7 @@ These structures are difficult to interpret because:
 - hierarchical relationships span many levels
 - traditional representations (matrices, CSV files) are not visually intuitive
 
-The goal of the project is therefore **not to discover new biological insights**, but to create a tool that helps users explore these relationships interactively and intuitively. :contentReference[oaicite:1]{index=1}
+The goal of the project is therefore **not to discover new biological insights**, but to create a tool that helps users explore these relationships interactively and intuitively.
 
 ---
 
@@ -90,7 +90,7 @@ It is responsible for:
 - dynamically expanding the graph based on user input
 - managing different exploration modes
 
-The interface supports zoom, pan, node selection, and progressive expansion of relationships. :contentReference[oaicite:2]{index=2}
+The interface supports zoom, pan, node selection, and progressive expansion of relationships.
 
 ---
 
@@ -165,7 +165,7 @@ Users start from a phenotype term and explore:
 - related genes
 - associated biological functions
 
-This interaction model allows users to gradually explore the graph without visual overload. :contentReference[oaicite:3]{index=3}
+This interaction model allows users to gradually explore the graph without visual overload.
 
 ---
 
@@ -182,7 +182,7 @@ Key design choices include:
 - contextual information panels
 - light/dark theme support
 
-Nodes are organized spatially according to their type and hierarchical depth to maintain visual clarity. :contentReference[oaicite:4]{index=4}
+Nodes are organized spatially according to their type and hierarchical depth to maintain visual clarity.
 
 ---
 

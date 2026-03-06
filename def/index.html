@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="icon" href="data:,">
+<title>Visualizzazione Grafi</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<style>
+:root{
+  --bg:#0b0c10;
+  --fg:#f8f9fe;
+
+  --gene:#4da6ff;
+  --go:#ff3333;
+  --hpo:#33cc33;
+
+  --go-hierarchy:#ffb000;
+  --hpo-hierarchy:#a855f7;
+
+  --gene-go:#ff5555;
+  --gene-hpo:#44cc44;
+
+  --is-a:#9933ff;
+  --part-of:#56b4e9;
+
+  --selection-stroke:#ffffff;
+
+  --panel-bg: rgba(0,0,0,.65);
+  --panel-bg-2: rgba(0,0,0,.60);
+
+  --pill-bg: rgba(0,0,0,.45);
+  --pill-border: rgba(255,255,255,.16);
+  --pill-active: rgba(255,255,255,.16);
+}
+
+body.light{
+  --bg:#eaecf1;
+  --fg:#4e4c4c;
+
+  --gene:#2887F5;
+  --go:#F2665F;
+  --hpo:#6BB198;
+
+  --go-hierarchy:#E0A100;
+  --hpo-hierarchy:#a855f7;
+
+  --gene-go:#d82d2d;
+  --gene-hpo:#2fa82f;
+
+  --is-a:#6a00cc;
+  --part-of:#005fa3;
+
+  --selection-stroke:#000000;
+
+  --panel-bg: rgba(255,255,255,.90);
+  --panel-bg-2: rgba(255,255,255,.85);
+
+  --pill-bg: rgba(255,255,255,.60);
+  --pill-border: rgba(0,0,0,.12);
+  --pill-active: rgba(0,0,0,.10);
+}
+
+html,body,svg{
+  width:100%;
+  height:100%;
+  margin:0;
+  overflow:hidden;
+}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+#controls{
+  position:fixed;
+  top:12px;
+  left:12px;
+  background:var(--panel-bg);
+  padding:14px 16px;
+  border-radius:10px;
+  z-index:10;
+  font-size:14.5px;
+  line-height:1.45;
+  max-width:320px;
+}
+
+#activeLabel{
+  font-size:16px;
+  font-weight:650;
+  letter-spacing:0.2px;
+}
+
+.controls-help{
+  margin-top:6px;
+  font-size:12.5px;
+  opacity:0.85;
+}
+
+#legend{
+  position:fixed;
+  top:10px;
+  right:10px;
+  background:var(--panel-bg-2);
+  padding:10px;
+  border-radius:8px;
+  z-index:10;
+  font-size:13px;
+}
+
+.legend-dot{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  display:inline-block;
+  margin-right:6px;
+}
+
+hr{
+  border:0;
+  border-top:1px solid rgba(255,255,255,.18);
+  margin:8px 0;
+}
+body.light hr{ border-top-color: rgba(0,0,0,.12); }
+
+#tooltip{
+  position:absolute;
+  background:#fff;
+  color:#111;
+  border:1px solid #ccc;
+  padding:6px 10px;
+  border-radius:6px;
+  pointer-events:none;
+  font-size:13px;
+  display:none;
+  z-index:20;
+}
+
+.node.selected{
+  stroke:var(--selection-stroke);
+  stroke-width:2.5;
+}
+
+/* compatibilità con classi gerarchia CC */
+.node.hierarchy.go  { fill: var(--go-hierarchy) !important; }
+.node.hierarchy.hpo { fill: var(--hpo-hierarchy) !important; }
+
+/* ========= Bottom picker UI ========= */
+#bottomUI{
+  position:fixed;
+  left:50%;
+  bottom:16px;
+  transform:translateX(-50%);
+  z-index:15;
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding:8px 10px;
+  border-radius:16px;
+  background: rgba(0,0,0,.25);
+  backdrop-filter: blur(10px);
+  border:1px solid rgba(255,255,255,.10);
+}
+body.light #bottomUI{
+  background: rgba(255,255,255,.55);
+  border-color: rgba(0,0,0,.10);
+}
+
+.segment{
+  display:flex;
+  gap:6px;
+  background:var(--pill-bg);
+  padding:6px;
+  border-radius:14px;
+  border:1px solid var(--pill-border);
+}
+
+/* pulsanti selezione go/gene/hpo e ontologia */
+.pill{
+  appearance:none;
+  border:0;
+  background:transparent;
+  color:var(--fg);
+  padding:8px 12px;
+  border-radius:12px;
+  cursor:pointer;
+  font-size:13px;
+  font-weight:600;
+  opacity:.88;
+}
+.pill:hover{ opacity:1; }
+.pill.active{
+  background:var(--pill-active);
+  opacity:1;
+}
+
+/* separatore “|” */
+.badge{
+  font-size:11.5px;
+  opacity:.75;
+  padding:0 6px;
+}
+
+/* svg */
+#graph{ display:block; }
+
+/* ========= Loader overlay ========= */
+.loader{
+  position:fixed;
+  inset:0;
+  z-index:999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(6px);
+}
+body.light .loader{
+  background: rgba(255,255,255,.55);
+}
+
+.loader.hidden{ display:none; }
+
+.loader-card{
+  width:min(360px, 92vw);
+  border-radius:16px;
+  padding:16px 18px;
+  background: var(--panel-bg);
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  display:flex;
+  gap:12px;
+  align-items:center;
+}
+body.light .loader-card{
+  border-color: rgba(0,0,0,.10);
+  box-shadow: 0 10px 30px rgba(0,0,0,.15);
+}
+
+.spinner{
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  border:3px solid rgba(255,255,255,.25);
+  border-top-color: rgba(255,255,255,.95);
+  animation: spin 0.9s linear infinite;
+  flex: 0 0 auto;
+}
+body.light .spinner{
+  border-color: rgba(0,0,0,.18);
+  border-top-color: rgba(0,0,0,.80);
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loader-text{
+  font-weight:700;
+  font-size:14px;
+}
+.loader-sub{
+  font-size:12px;
+  opacity:.85;
+  margin-top:2px;
+}
+
+/* wrapper testo */
+.loader-card > div:last-child{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+
+.is-loading #bottomUI,
+.is-loading #legend,
+.is-loading #controls{
+  pointer-events:none;
+  filter: grayscale(.1) opacity(.85);
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="controls">
+  Nodo selezionato: <b id="activeLabel">—</b>
+  <div class="controls-help" id="helpText">
+    —
+  </div>
+</div>
+
+<div id="legend">
+  <div><span class="legend-dot" style="background:var(--gene)"></span>Gene</div>
+  <div><span class="legend-dot" style="background:var(--go)"></span>GO</div>
+  <div><span class="legend-dot" style="background:var(--hpo)"></span>HPO</div>
+  <div><span class="legend-dot" style="background:var(--go-hierarchy)"></span>GO (gerarchia)</div>
+  <div><span class="legend-dot" style="background:var(--hpo-hierarchy)"></span>HPO (gerarchia)</div>
+  <hr>
+  <div style="color:var(--is-a)">— is_a</div>
+  <div style="color:var(--part-of)">— part_of</div>
+  <hr>
+<!-- TOGGLE TEMA CHIARO/SCURO -->
+<div style="margin-top:8px; display:flex; justify-content:center;">
+  <div class="segment" id="segTheme">
+    <button class="pill active" data-theme="dark" title="Modalità scura">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <!--LUNA-->
+        <path fill="currentColor"
+          d="M21.75 15.5a9.38 9.38 0 0 1-11.25-11.25
+             9.5 9.5 0 1 0 11.25 11.25z"/>
+      </svg>
+    </button>
+    <button class="pill" data-theme="light" title="Modalità chiara">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <!--SOLE-->
+        <circle cx="12" cy="12" r="4" fill="currentColor"/>
+        <line x1="12" y1="1.5" x2="12" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line x1="12" y1="19" x2="12" y2="22.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line x1="1.5" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line x1="19" y1="12" x2="22.5" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+
+        <line x1="4.2" y1="4.2" x2="6.9" y2="6.9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line x1="17.1" y1="17.1" x2="19.8" y2="19.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line x1="17.1" y1="6.9" x2="19.8" y2="4.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line x1="4.2" y1="19.8" x2="6.9" y2="17.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+</div>
+
+<div id="bottomUI">
+  <div class="segment" id="segOnt">
+    <button class="pill" data-ont="bp">BP</button>
+    <button class="pill active" data-ont="cc">CC</button>
+    <button class="pill" data-ont="mf">MF</button>
+  </div>
+
+  <span class="badge">|</span>
+
+  <div class="segment" id="segMode">
+    <button class="pill active" data-mode="go">GO</button>
+    <button class="pill" data-mode="gene">Gene</button>
+    <button class="pill" data-mode="hpo">HPO</button>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+<svg id="graph"></svg>
+
+<script>
+
+/* LOADER OVERLAY */
+function ensureLoader() {
+  if (document.getElementById("loader")) return;
+
+  const div = document.createElement("div");
+  div.id = "loader";
+  div.className = "loader hidden";
+  div.setAttribute("aria-live", "polite");
+  div.setAttribute("aria-busy", "true");
+  div.innerHTML = `
+    <div class="loader-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <div>
+        <div class="loader-text" id="loaderText">Caricamento…</div>
+        <div class="loader-sub" id="loaderSub">—</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(div);
+}
+
+ensureLoader();
+
+
+/* GLOBALS / BOOTSTRAP */
+const loader = document.getElementById("loader");
+const loaderText = document.getElementById("loaderText");
+const loaderSub = document.getElementById("loaderSub");
+
+function prettyOnt(ont){ return ont.toUpperCase(); }
+function prettyMode(mode){
+  if (mode === "go") return "GO";
+  if (mode === "gene") return "Gene";
+  return "HPO";
+}
+
+/* minimo tempo loader per evitare flash troppo rapidi */
+const MIN_LOADER_MS = 150;
+
+/* utility async per frame successivo */
+function nextFrame() {
+  return new Promise(requestAnimationFrame);
+}
+
+/* utility sleep */
+function sleep(ms) {
+  return new Promise(res => setTimeout(res, ms));
+}
+
+/* mostra loader */
+function showLoader(main, sub="") {
+  if (!loader) return;
+  if (loaderText) loaderText.textContent = main || "Caricamento…";
+  if (loaderSub) loaderSub.textContent = sub || "";
+  loader.classList.remove("hidden");
+  document.body.classList.add("is-loading");
+}
+
+/* nasconde loader */
+function hideLoader() {
+  if (!loader) return;
+  loader.classList.add("hidden");
+  document.body.classList.remove("is-loading");
+}
+
+/* GLOBAL SVG + UI ELEMENTS + STATE */
+const svg = d3.select("#graph");
+const tooltip = d3.select("#tooltip");
+const activeLabel = d3.select("#activeLabel");
+const helpText = d3.select("#helpText");
+
+const width = () => window.innerWidth;
+const height = () => window.innerHeight;
+
+let g = null;
+let zoomBehavior = null;
+
+/* stato corrente */
+let current = { ont: "cc", mode: "gene" };
+const dataCache = new Map(); 
+
+/* UI HELP TEXT */
+function setHelp() {
+  const mode = current.mode;
+  const ont = current.ont.toUpperCase();
+  if (mode === "gene") {
+    helpText.html(
+      `Modalità: <b>Gene</b> — Ontologia: <b>${ont}</b><br>` +
+      `• Click gene → GO + HPO diretti<br>` +
+      `• Click GO/HPO → gerarchia<br>` +
+      `• Click sfondo → reset`
+    );
+  } else if (mode === "go") {
+    helpText.html(
+      `Modalità: <b>GO</b> — Ontologia: <b>${ont}</b><br>` +
+      `• Click GO (foglia) → gerarchia GO + gene + HPO diretti<br>` +
+      `• Click HPO (diretto) → gerarchia HPO<br>` +
+      `• Click sfondo → reset`
+    );
+  } else {
+    helpText.html(
+      `Modalità: <b>HPO</b> — Ontologia: <b>${ont}</b><br>` +
+      `• Click HPO (foglia) → gerarchia HPO + gene + GO diretti<br>` +
+      `• Click GO (diretto) → gerarchia GO<br>` +
+      `• Click sfondo → reset`
+    );
+  }
+}
+
+/* costruisce nome file JSON da caricare */
+function jsonPathFor(ont) {
+  return `graph_go_${ont}_gene_hpo.json`;
+}
+
+/* aggiorna selezioni UI */
+function resetUISelection() {
+  document.querySelectorAll('#segOnt .pill').forEach(b => {
+    b.classList.toggle('active', b.dataset.ont === current.ont);
+  });
+  document.querySelectorAll('#segMode .pill').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === current.mode);
+  });
+  setHelp();
+}
+
+/* distrugge scena SVG corrente */
+function destroyScene() {
+  activeLabel.text("—");
+  tooltip.style("display","none");
+
+  svg.on(".zoom", null);
+  svg.on("click", null);
+
+  svg.selectAll("*").remove();
+  g = svg.append("g");
+}
+
+/* setup zoom/pan */
+function setupZoom() {
+  zoomBehavior = d3.zoom()
+    .scaleExtent([0.2, 4])
+    .on("zoom", e => g.attr("transform", e.transform));
+
+  svg.call(zoomBehavior);
+}
+
+/* COMMON TOOLTIP BINDING */
+function bindCommonTooltip(nodeSel) {
+  nodeSel
+    .on("mouseover", (e,d) => {
+      tooltip.style("display","block").html(
+        `<b>${d.id}</b>` +
+        (d.name ? `<br>${d.name}` : "") +
+        (d.depth!=null ? `<br>Depth: ${d.depth}` : "")
+      );
+    })
+    .on("mousemove", e => {
+      tooltip.style("left",(e.pageX+10)+"px").style("top",(e.pageY+10)+"px");
+    })
+    .on("mouseout", () => tooltip.style("display","none"));
+}
+
+/* LOADING DATA + ROUTER */
+function deepClone(obj) {
+  if (typeof structuredClone === "function") return structuredClone(obj);
+  return JSON.parse(JSON.stringify(obj));
+}
+
+/* carica dati (con caching) */
+async function loadData(ont) {
+  if (!dataCache.has(ont)) {
+    const raw = await d3.json(jsonPathFor(ont));
+    dataCache.set(ont, raw);
+  }
+  // IMPORTANTISSIMO: ogni render lavora su una copia pulita
+  return deepClone(dataCache.get(ont));
+}
+
+
+let renderToken = 0;
+
+/* funzione principale di rendering */
+async function render() {
+  const token = ++renderToken;
+
+  resetUISelection();
+
+  showLoader(
+    `Caricamento ${current.ont.toUpperCase()} · modalità ${current.mode.toUpperCase()}…`,
+    "Preparazione visualizzazione"
+  );
+
+  //garantisce che l'overlay venga effettivamente disegnato
+  await nextFrame();
+  await nextFrame();
+
+  const t0 = performance.now();
+
+  try {
+    destroyScene();
+    setupZoom();
+
+    const data = await loadData(current.ont, current.mode);
+
+    if (token !== renderToken) return;
+
+    if (current.mode === "gene") initGeneView(data);
+    else if (current.mode === "go") initGoView(data);
+    else initHpoView(data);
+
+  } catch (err) {
+    console.error(err);
+    if (token !== renderToken) return;
+
+    showLoader("Errore di caricamento", "Controlla console / file JSON");
+    await sleep(900);
+    hideLoader();
+    return;
+  }
+
+  const elapsed = performance.now() - t0;
+  const remaining = MIN_LOADER_MS - elapsed;
+  if (remaining > 0) await sleep(remaining);
+
+  if (token === renderToken) hideLoader();
+}
+
+
+/*GENE-CENTRICA*/
+function initGeneView(data) {
+  const w = width(), h = height();
+
+  const nodes = data.nodes;
+  const links = data.edges;
+  const nodeById = new Map(nodes.map(d => [d.id, d]));
+
+  const hierarchyLinks = links.filter(l => l.rel === "is_a" || l.rel === "part_of");
+  const geneGoLinks = links.filter(l => l.rel === "gene_go");
+  const geneHpoLinks = links.filter(l => l.rel === "gene_hpo");
+
+  // parents map (source -> [targets]) per BFS
+  const parentsOf = new Map();
+  hierarchyLinks.forEach(l => {
+    if (!parentsOf.has(l.source)) parentsOf.set(l.source, []);
+    parentsOf.get(l.source).push(l.target);
+  });
+
+  // Calcola profondità massima GO e HPO, evitando i null
+  const maxGoDepth  = d3.max(nodes.filter(d => d.type==="go"),  d => d.depth ?? 0) ?? 0;
+  const maxHpoDepth = d3.max(nodes.filter(d => d.type==="hpo"), d => d.depth ?? 0) ?? 0;
+
+  // y della banda dei geni
+  const GENE_Y = h * 0.55;
+  //distanza verticale tra livelli di profondità
+  const LEVEL_SPACING = 30;
+  // gab delle ontologie dalla banda dei geni
+  const ONT_OFFSET = 20;
+
+  const GENE_RADIUS = 4;
+  // distanza minima orizzontale tra geni
+  const GENE_MIN_DIST = GENE_RADIUS * 2 + 6;
+
+  // Posizioni base geni (ordine crescente ID)
+  const geneNodes = nodes
+    .filter(d => d.type === "gene")
+    .sort((a,b) => String(a.id).localeCompare(String(b.id), "it", { numeric:true }));
+
+  // calcola larghezza banda geni
+  const requiredWidth = geneNodes.length * GENE_MIN_DIST;
+  const bandWidth = Math.max(w - 80, requiredWidth);
+  const geneX0 = (w - bandWidth) / 2;
+
+  // assegnazione posizione base geni
+  geneNodes.forEach((d,i) => {
+    d.x = geneX0 + i * GENE_MIN_DIST;
+    d.y = GENE_Y + (Math.random() - 0.5) * 30;
+  });
+
+  // posizione base go/hpo per profondità
+  nodes.forEach(d => {
+    if (d.type === "go") {
+      d.baseX = w * 0.5;
+      d.x = d.baseX;
+      d.y = GENE_Y - ONT_OFFSET - (maxGoDepth - (d.depth ?? 0)) * LEVEL_SPACING;
+    } else if (d.type === "hpo") {
+      d.baseX = w * 0.5;
+      d.x = d.baseX;
+      d.y = GENE_Y + ONT_OFFSET + (maxHpoDepth - (d.depth ?? 0)) * LEVEL_SPACING;
+    }
+  });
+
+  // disegno dei link, creati tutti, ma nascosti di default
+  const linkHierarchy = g.selectAll(".lh")
+    .data(hierarchyLinks).enter().append("line")
+    .attr("stroke", d => d.rel==="is_a" ? "var(--is-a)" : "var(--part-of)")
+    .attr("stroke-width", 1)
+    .attr("opacity", 0.6)
+    .style("display","none");
+
+  const linkGeneGO = g.selectAll(".lggo")
+    .data(geneGoLinks).enter().append("line")
+    .attr("stroke","var(--gene-go)")
+    .attr("opacity",0.7)
+    .style("display","none");
+
+  const linkGeneHPO = g.selectAll(".lghpo")
+    .data(geneHpoLinks).enter().append("line")
+    .attr("stroke","var(--gene-hpo)")
+    .attr("opacity",0.7)
+    .style("display","none");
+
+  // disegno nodi, creati tutti, ma solo geni visibili di default
+  const node = g.selectAll(".node")
+    .data(nodes).enter().append("circle")
+    .attr("class", d => `node ${d.type}`)
+    .attr("r", 4)
+    .attr("fill", d => d.type==="gene" ? "var(--gene)" : d.type==="go" ? "var(--go)" : "var(--hpo)")
+    .attr("cx", d => d.x).attr("cy", d => d.y)
+    .style("display", d => d.type==="gene" ? null : "none");
+
+  bindCommonTooltip(node);
+
+  // funzioni di aggiornamento posizioni
+  function updateNodePositions() { node.attr("cx", d => d.x).attr("cy", d => d.y); }
+  function updateLinks() {
+    [linkHierarchy, linkGeneGO, linkGeneHPO].forEach(sel =>
+      sel.attr("x1", d => nodeById.get(d.source)?.x)
+         .attr("y1", d => nodeById.get(d.source)?.y)
+         .attr("x2", d => nodeById.get(d.target)?.x)
+         .attr("y2", d => nodeById.get(d.target)?.y)
+    );
+  }
+
+  // layout orizzontale locale per go/hpo diretti del gene
+  function layoutLocal(list, cx) {
+    const spread = Math.max(120, (list.length - 1) * 20);
+    list.forEach((d,i) => {
+      const t = list.length===1 ? 0.5 : i/(list.length-1);
+      d.x = cx - spread/2 + t*spread;
+    });
+  }
+
+  // layout per gerarchia go/hpo (senza che i nodi si sovrappongano)
+  function layoutHierarchyLocal(list, cx) {
+    const byDepth = d3.group(list, d => d.depth ?? 0);
+    byDepth.forEach(level => {
+      const spread = Math.max(80, (level.length - 1) * 26);
+      level.forEach((d,i) => {
+        const t = level.length===1 ? 0.5 : i/(level.length-1);
+        d.x = cx - spread/2 + t*spread;
+      });
+    });
+  }
+
+  // gene selezionato
+  let activeGene = null;
+
+  // ritorno alla home (solo geni)
+  function collapseAll() {
+    node.style("display", d => d.type==="gene" ? null : "none")
+      .classed("hierarchy", false)
+      .classed("selected", false);
+
+    //reset link
+    linkHierarchy.style("display","none");
+    linkGeneGO.style("display","none");
+    linkGeneHPO.style("display","none");
+
+    //reset label
+    activeLabel.text("—");
+    activeGene = null;
+
+    //reset posizioni orizzontali
+    nodes.forEach(d => { if (d.baseX!=null) d.x = d.baseX; });
+
+    //aggiorna disegno
+    updateNodePositions();
+    updateLinks();
+  }
+
+  //mostra go/hpo diretti di un gene
+  function expandGene(geneId) {
+    //resettiamo tutto prima
+    collapseAll();
+
+    //evidenzia il gene selezionato
+    node.classed("selected", false);
+    node.filter(d => d.id === geneId).classed("selected", true);
+
+    //aggiorna stato attivo
+    activeGene = geneId;
+    activeLabel.text(geneId);
+
+    //posizione orizzontale del gene selezionato
+    const gx = nodeById.get(geneId).x;
+
+    //trova i nodi go/hpo diretti
+    const goNodes = geneGoLinks.filter(l => l.source===geneId).map(l => nodeById.get(l.target)).filter(Boolean);
+    const hpoNodes = geneHpoLinks.filter(l => l.source===geneId).map(l => nodeById.get(l.target)).filter(Boolean);
+
+    //layout orizzontale locale
+    layoutLocal(goNodes, gx);
+    layoutLocal(hpoNodes, gx);
+
+    // rende visibili i nodi e gli archi go/hpo diretti
+    node.filter(d => goNodes.includes(d) || hpoNodes.includes(d)).style("display", null);
+    linkGeneGO.style("display", l => l.source===geneId ? null : "none");
+    linkGeneHPO.style("display", l => l.source===geneId ? null : "none");
+
+    //aggiorna tutto
+    updateNodePositions();
+    updateLinks();
+  }
+
+  // mostra gerarchia go/hpo a partire da un nodo
+  function previewHierarchy(type, startId) {
+    //mostra solo se c'è un gene attivo
+    if (!activeGene) return;
+
+    const gx = nodeById.get(activeGene).x;
+    const startNode = nodeById.get(startId);
+    if (!startNode) return;
+
+    const fixedX = startNode.x, fixedY = startNode.y;
+
+    const directGO = new Set(geneGoLinks.filter(l => l.source===activeGene).map(l => l.target));
+    const directHPO = new Set(geneHpoLinks.filter(l => l.source===activeGene).map(l => l.target));
+
+    // BFS per trovare tutti i nodi della gerarchia collegati al nodo di partenza
+    const visited = new Set();
+    const queue = [startId];
+    while (queue.length) {
+      const cur = queue.shift();
+      if (visited.has(cur)) continue;
+      visited.add(cur);
+      (parentsOf.get(cur) || []).forEach(p => queue.push(p));
+    }
+
+    // nodi della gerarchia da disporre
+    const hierarchyNodes = nodes.filter(d => d.type===type && visited.has(d.id) && d.id!==startId);
+    const HIERARCHY_OFFSET = 160;
+    const hierarchyCenter = (type==="go") ? (gx - HIERARCHY_OFFSET) : (gx + HIERARCHY_OFFSET);
+
+    layoutHierarchyLocal(hierarchyNodes, hierarchyCenter);
+
+    startNode.x = fixedX;
+    startNode.y = fixedY;
+
+    // per cambiare colore ai nodi della gerarchia si aggiunge la classe
+    node.classed("hierarchy", d => d.type===type && visited.has(d.id) && d.id!==startId);
+
+    node.style("display", d => {
+      if (d.type==="gene") return null;
+      if (d.type==="go"  && directGO.has(d.id)) return null;
+      if (d.type==="hpo" && directHPO.has(d.id)) return null;
+      if (d.type===type && visited.has(d.id)) return null;
+      return "none";
+    });
+
+    linkGeneGO.style("display", l => l.source===activeGene ? null : "none");
+    linkGeneHPO.style("display", l => l.source===activeGene ? null : "none");
+
+    // mostra solo i link della gerarchia tra i nodi visitati, per non mischiare gerarchie diverse
+    linkHierarchy.style("display", l => {
+      const s = nodeById.get(l.source), t = nodeById.get(l.target);
+      return (s?.type===type && t?.type===type && visited.has(s.id) && visited.has(t.id)) ? null : "none";
+    });
+
+    // aggiorna coordinate e disegno
+    updateNodePositions();
+    updateLinks();
+    node.raise();
+  }
+
+  // BINDING EVENTI NODI + SFONDO
+  node.on("click", (e,d) => {
+    e.stopPropagation();
+    node.classed("selected", false);
+    d3.select(e.currentTarget).classed("selected", true);
+
+    if (d.type==="gene") expandGene(d.id);
+    else previewHierarchy(d.type, d.id);
+  });
+
+  // click sullo sfondo per resettare
+  svg.on("click", e => { if (e.target === svg.node()) collapseAll(); });
+
+  // inizializza vista con tutti i geni visibili
+  updateLinks();
+}
+
+
+
+
+
+/* GO-CENTRICA */
+function initGoView(data) {
+  const w = width(), h = height();
+
+  const nodes = data.nodes;
+  const links = data.edges;
+  const byId = new Map(nodes.map(d => [d.id, d]));
+
+  const hierarchy = links.filter(l => l.rel === "is_a" || l.rel === "part_of");
+  const geneGo    = links.filter(l => l.rel === "gene_go");
+  const geneHpo   = links.filter(l => l.rel === "gene_hpo");
+
+  // parents map (source -> [targets]) per HPO BFS
+  const parentsOf = new Map();
+  hierarchy.forEach(l => {
+    if (!parentsOf.has(l.source)) parentsOf.set(l.source, []);
+    parentsOf.get(l.source).push(l.target);
+  });
+
+  // GO parents edges (source -> [edges])
+  const goParents  = d3.group(hierarchy, d => d.source);
+  const genesByGo  = d3.group(geneGo,   d => d.target);
+  const hpoByGene  = d3.group(geneHpo,  d => d.source);
+
+  // Calcola profondità massima GO e HPO, evitando i null
+  const maxGoDepth  = d3.max(nodes.filter(d => d.type==="go"),  d => d.depth ?? 0) ?? 0;
+  const maxHpoDepth = d3.max(nodes.filter(d => d.type==="hpo"), d => d.depth ?? 0) ?? 0;
+
+  // Base layout: GO sopra, GENI in mezzo, HPO sotto 
+const GENE_Y = h * 0.55;
+
+  // gap “di base” tra Gene e i due strati
+  const GO_GAP  = 35;
+  const HPO_GAP = 70;
+
+  // spaziatura tra livelli (puoi anche differenziarla)
+  const GO_LEVEL_SPACING  = 30; 
+  const HPO_LEVEL_SPACING = 26;  
+
+  nodes.forEach(d => {
+    d.baseX = w * 0.5;
+
+    if (d.type === "go") {
+      const dep = d.depth ?? 0;
+      d.baseY = GENE_Y - GO_GAP - (maxGoDepth - dep) * GO_LEVEL_SPACING;
+    } else if (d.type === "hpo") {
+      const dep = d.depth ?? 0;
+      d.baseY = GENE_Y + HPO_GAP + (maxHpoDepth - dep) * HPO_LEVEL_SPACING;
+    } else {
+      d.baseY = GENE_Y;
+    }
+
+    d.x = d.baseX;
+    d.y = d.baseY;
+  });
+
+
+  // calcolo GO foglie per l'overview iniziale
+  const goChildren = new Map();
+  hierarchy.forEach(l => {
+    if (!goChildren.has(l.target)) goChildren.set(l.target, []);
+    goChildren.get(l.target).push(l.source);
+  });
+
+  // insieme di GO che hanno almeno un gene diretto
+  const goWithGene = new Set(geneGo.map(l => l.target));
+  const goLeaves = nodes.filter(d =>
+    d.type === "go" &&
+    d.depth != null &&
+    goWithGene.has(d.id) &&
+    !goChildren.has(d.id)
+  );
+
+  function layoutLocal(list, cx) {
+    const spread = Math.max(120, (list.length - 1) * 20);
+    list.forEach((d,i) => {
+      const t = list.length === 1 ? 0.5 : i/(list.length-1);
+      d.x = cx - spread/2 + t*spread;
+    });
+  }
+
+  function layoutHierarchyLocal(list, cx) {
+    const byDepth = d3.group(list, d => d.depth ?? 0);
+    byDepth.forEach(level => {
+      const spread = Math.max(80, (level.length - 1) * 26);
+      level.forEach((d,i) => {
+        const t = level.length===1 ? 0.5 : i/(level.length-1);
+        d.x = cx - spread/2 + t*spread;
+      });
+    });
+  }
+
+  function layoutGOLeaves(list, centerX = w/2) {
+    const byDepth = d3.group(list, d => d.depth ?? 0);
+    byDepth.forEach(group => {
+      const spread = Math.max(260, (group.length - 1) * 36);
+      group.forEach((d,i) => {
+        const t = group.length === 1 ? 0.5 : i/(group.length-1);
+        d.x = centerX - spread/2 + t*spread;
+        d.y = d.baseY;
+      });
+    });
+  }
+
+  //applica layout iniziale GO foglie
+  layoutGOLeaves(goLeaves);
+  const initialPositions = new Map(goLeaves.map(d => [d.id, { x:d.x, y:d.y }]));
+
+  // stato e set di visibilità
+  let activeGoId = null;
+
+  let visibleGenes = new Set();
+  let visibleHpoDirect = new Set();
+  let visibleHpoHierarchy = new Set();
+
+  let goVisited = new Set();
+  let hpoVisited = new Set();
+
+  let goTreeEdges = new Set();
+  let hpoTreeEdges = new Set();
+
+  function edgeKey(l) { return `${l.source}→${l.target}|${l.rel}`; }
+
+  // reset flag di gerarchia
+  function clearFlags() {
+    nodes.forEach(n => {
+      delete n._isGoHierarchy;
+      delete n._isHpoHierarchy;
+      delete n._isHpoDirect;
+    });
+  }
+
+  // Links
+  const linkH = g.selectAll(".lh")
+    .data(hierarchy).enter().append("line")
+    .attr("stroke", d => d.rel === "is_a" ? "var(--is-a)" : "var(--part-of)")
+    .attr("stroke-width", 1)
+    .attr("opacity", 0.7)
+    .style("display","none");
+
+  const linkGG = g.selectAll(".lgg")
+    .data(geneGo).enter().append("line")
+    .attr("stroke","var(--gene-go)")
+    .attr("opacity",0.7)
+    .style("display","none");
+
+  const linkGH = g.selectAll(".lgh")
+    .data(geneHpo).enter().append("line")
+    .attr("stroke","var(--gene-hpo)")
+    .attr("opacity",0.7)
+    .style("display","none");
+
+  const node = g.selectAll(".node")
+    .data(nodes).enter().append("circle")
+    .attr("class", d => `node ${d.type}`)
+    .attr("r",4)
+    .attr("fill", d => {
+      if (d.type === "gene") return "var(--gene)";
+      if (d.type === "go") return d._isGoHierarchy ? "var(--go-hierarchy)" : "var(--go)";
+      if (d._isHpoHierarchy) return "var(--hpo-hierarchy)";
+      return "var(--hpo)";
+    })
+    .attr("cx", d => d.x).attr("cy", d => d.y)
+    .style("display", d => goLeaves.includes(d) ? null : "none");
+
+  bindCommonTooltip(node);
+
+  function updateNodeStyles() {
+    node.attr("fill", d => {
+      if (d.type === "gene") return "var(--gene)";
+      if (d.type === "go") return d._isGoHierarchy ? "var(--go-hierarchy)" : "var(--go)";
+      if (d._isHpoHierarchy) return "var(--hpo-hierarchy)";
+      return "var(--hpo)";
+    });
+  }
+
+  // aggiornamento posizioni e colori
+  function update() {
+    node.attr("cx", d => d.x).attr("cy", d => d.y);
+
+    [linkH, linkGG, linkGH].forEach(sel => {
+      sel.attr("x1", d => byId.get(d.source)?.x)
+         .attr("y1", d => byId.get(d.source)?.y)
+         .attr("x2", d => byId.get(d.target)?.x)
+         .attr("y2", d => byId.get(d.target)?.y);
+    });
+
+    updateNodeStyles();
+  }
+
+  // espande da un GO selezionato
+  function expandFromGO(go) {
+    // pulisce flag precedenti
+    clearFlags();
+
+    // resetta hpo gerachici
+    hpoVisited = new Set();
+    hpoTreeEdges = new Set();
+    visibleHpoHierarchy = new Set();
+    nodes.forEach(n => { if (n.type==="hpo") delete n._isHpoHierarchy; });
+
+    activeGoId = go.id;
+
+    // BFS GO verso root + tree edges
+    goVisited = new Set();
+    goTreeEdges = new Set();
+
+    const queue = [go.id];
+    goVisited.add(go.id);
+
+    while (queue.length) {
+      const cur = queue.shift();
+      const out = goParents.get(cur) || [];
+      for (const l of out) {
+        const parentId = l.target;
+        const p = byId.get(parentId);
+        if (!p || p.type !== "go") continue;
+
+        if (!goVisited.has(parentId)) {
+          goVisited.add(parentId);
+          queue.push(parentId);
+          goTreeEdges.add(edgeKey(l));
+        }
+      }
+    }
+
+    // flag dei nodi gerarchia GO
+    goVisited.forEach(id => {
+      const n = byId.get(id);
+      if (!n || n.type!=="go") return;
+      if (id !== go.id) n._isGoHierarchy = true;
+    });
+
+    // posizionamento gerarchia GO
+    const start = byId.get(go.id);
+    const fixedX = start.x;
+    start.y = start.baseY;
+    start.x = fixedX;
+
+    const goHierarchyNodes = nodes.filter(d => d.type==="go" && goVisited.has(d.id) && d.id !== go.id);
+    goHierarchyNodes.forEach(d => { d.y = d.baseY; });
+    layoutHierarchyLocal(goHierarchyNodes, fixedX + 160);
+
+    // geni diretti del go
+    visibleGenes = new Set((genesByGo.get(go.id) || []).map(l => l.source));
+    const genes = [...visibleGenes].map(id => byId.get(id)).filter(Boolean);
+    genes.forEach(d => { d.y = d.baseY; });
+    layoutLocal(genes, fixedX);
+
+    // hpo diretti derivati dai geni
+    visibleHpoDirect = new Set();
+    const hpos = [];
+    genes.forEach(geneNode => {
+      (hpoByGene.get(geneNode.id) || []).forEach(l => {
+        visibleHpoDirect.add(l.target);
+        const hpoNode = byId.get(l.target);
+        if (hpoNode && hpoNode.type==="hpo") hpos.push(hpoNode);
+      });
+    });
+
+    visibleHpoDirect.forEach(id => {
+      const n = byId.get(id);
+      if (n && n.type==="hpo") n._isHpoDirect = true;
+    });
+
+    hpos.forEach(d => { d.y = d.baseY; });
+    layoutHierarchyLocal(hpos, fixedX);
+
+    // visibilità nodi
+    node.style("display", d => {
+      if (d.type === "go") return goVisited.has(d.id) ? null : "none";
+      if (d.type === "gene") return visibleGenes.has(d.id) ? null : "none";
+      if (d.type === "hpo") return visibleHpoDirect.has(d.id) ? null : "none";
+      return "none";
+    });
+
+    // visibilità link
+    linkGG.style("display", l => (l.target === activeGoId) ? null : "none");
+    linkGH.style("display", l => visibleGenes.has(l.source) ? null : "none");
+
+    // visibilità link gerarchia, solo quelli nel tree GO, + eventualmente quelli tree HPO 
+    linkH.style("display", l => {
+      const s = byId.get(l.source), t = byId.get(l.target);
+      if (!s || !t) return "none";
+
+      if (s.type==="go" && t.type==="go") return goTreeEdges.has(edgeKey(l)) ? null : "none";
+      if (s.type==="hpo" && t.type==="hpo") return hpoTreeEdges.has(edgeKey(l)) ? null : "none";
+      return "none";
+    });
+
+    // aggiorna disegno
+    update();
+  }
+
+  // espande gerarchia HPO da un HPO selezionato
+  function expandHpoHierarchy(startHpoId) {
+    if (!activeGoId) return;
+    if (!visibleHpoDirect.has(startHpoId)) return;
+
+    const startNode = byId.get(startHpoId);
+    if (!startNode) return;
+
+    const fixedX = startNode.x;
+    const fixedY = startNode.y;
+
+    // BFS HPO verso root
+    hpoVisited = new Set();
+    const queue = [startHpoId];
+
+    while (queue.length) {
+      const cur = queue.shift();
+      if (hpoVisited.has(cur)) continue;
+      hpoVisited.add(cur);
+
+      (parentsOf.get(cur) || []).forEach(p => {
+        const pn = byId.get(p);
+        if (pn && pn.type === "hpo") queue.push(p);
+      });
+    }
+
+    visibleHpoHierarchy = new Set(hpoVisited);
+
+    //pulisce flag precedenti
+    nodes.forEach(n => { if (n.type==="hpo") delete n._isHpoHierarchy; });
+
+    // setta flag nodi gerarchia HPO
+    hpoVisited.forEach(id => {
+      if (id === startHpoId) return;
+      if (visibleHpoDirect.has(id)) return;
+      const n = byId.get(id);
+      if (n && n.type==="hpo") n._isHpoHierarchy = true;
+    });
+
+    // posizionamento gerarchia HPO (desta del pivot)
+    const parentsOnly = [...hpoVisited]
+      .map(id => byId.get(id))
+      .filter(d => d && d.type==="hpo" && d.id !== startHpoId);
+
+    parentsOnly.forEach(d => { d.y = d.baseY; });
+    layoutHierarchyLocal(parentsOnly, fixedX + 160);
+
+    startNode.x = fixedX;
+    startNode.y = fixedY;
+
+    node.style("display", d => {
+      if (d.type==="go") return goVisited.has(d.id) ? null : "none";
+      if (d.type==="gene") return visibleGenes.has(d.id) ? null : "none";
+      if (d.type==="hpo") {
+        if (visibleHpoDirect.has(d.id)) return null;
+        if (visibleHpoHierarchy.has(d.id)) return null;
+        return "none";
+      }
+      return "none";
+    });
+
+    linkGG.style("display", l => (l.target === activeGoId) ? null : "none");
+    linkGH.style("display", l => visibleGenes.has(l.source) ? null : "none");
+
+    linkH.style("display", l => {
+      const s = byId.get(l.source), t = byId.get(l.target);
+      if (!s || !t) return "none";
+
+      if (s.type==="go" && t.type==="go") return goTreeEdges.has(edgeKey(l)) ? null : "none";
+      if (s.type==="hpo" && t.type==="hpo") return (hpoVisited.has(s.id) && hpoVisited.has(t.id)) ? null : "none";
+      return "none";
+    });
+
+    update();
+  }
+
+  // reset alla overview iniziale
+  function resetToOverview() {
+    activeGoId = null;
+    visibleGenes = new Set();
+    visibleHpoDirect = new Set();
+    visibleHpoHierarchy = new Set();
+    goVisited = new Set();
+    hpoVisited = new Set();
+    goTreeEdges = new Set();
+    hpoTreeEdges = new Set();
+
+    // reset visuale
+    clearFlags();
+    node.classed("selected", false);
+    activeLabel.text("—");
+
+    // reset posizioni iniziali
+    goLeaves.forEach(d => {
+      const p = initialPositions.get(d.id);
+      if (p) { d.x = p.x; d.y = p.y; }
+    });
+
+    // mostra solo le foglie GO
+    node.style("display", d => goLeaves.includes(d) ? null : "none");
+    linkH.style("display","none");
+    linkGG.style("display","none");
+    linkGH.style("display","none");
+
+    update();
+  }
+
+  // handler eventi nodi + sfondo
+  node.on("click", (e,d) => {
+    e.stopPropagation();
+    node.classed("selected", false);
+    d3.select(e.currentTarget).classed("selected", true);
+    activeLabel.text(d.id);
+
+    if (d.type==="go") expandFromGO(d);
+    else if (d.type==="hpo") expandHpoHierarchy(d.id);
+  });
+
+  svg.on("click", e => { if (e.target === svg.node()) resetToOverview(); });
+
+  update();
+}
+
+
+
+/* HPO-CENTRICA ("simmetrica" a go-centrica)*/
+function initHpoView(data) {
+  const w = width(), h = height();
+
+  const nodes = data.nodes;
+  const links = data.edges;
+  const byId = new Map(nodes.map(d => [d.id, d]));
+
+  const hierarchy = links.filter(l => l.rel === "is_a" || l.rel === "part_of");
+  const geneHpo   = links.filter(l => l.rel === "gene_hpo");
+  const geneGo    = links.filter(l => l.rel === "gene_go");
+
+  const parents = d3.group(hierarchy, d => d.source); 
+  const genesByHpo = d3.group(geneHpo, d => d.target);
+  const gosByGene  = d3.group(geneGo,  d => d.source); 
+
+  // Calcola profondità massima GO e HPO, evitando i null
+  const maxGoDepth  = d3.max(nodes.filter(d => d.type==="go"),  d => d.depth ?? 0) ?? 0;
+  const maxHpoDepth = d3.max(nodes.filter(d => d.type==="hpo"), d => d.depth ?? 0) ?? 0;
+
+  // Base layout
+  const GENE_Y = h * 0.55;
+  const LEVEL_SPACING = 30;
+  const ONT_OFFSET = 20;
+
+  nodes.forEach(d => {
+    if (d.type === "go") {
+      d.baseX = w * 0.5;
+      d.baseY = GENE_Y - ONT_OFFSET - (maxGoDepth - (d.depth ?? 0)) * LEVEL_SPACING;
+    } else if (d.type === "hpo") {
+      d.baseX = w * 0.5;
+      d.baseY = GENE_Y + ONT_OFFSET + (maxHpoDepth - (d.depth ?? 0)) * LEVEL_SPACING;
+    } else {
+      d.baseX = w * 0.5;
+      d.baseY = GENE_Y;
+    }
+    d.x = d.baseX;
+    d.y = d.baseY;
+  });
+
+  // calcolo foglie HPO per l'overview iniziale
+  const hpoChildren = new Map();
+  hierarchy.forEach(l => {
+    if (!hpoChildren.has(l.target)) hpoChildren.set(l.target, []);
+    hpoChildren.get(l.target).push(l.source);
+  });
+
+  // insieme di HPO che hanno almeno un gene diretto
+  const hpoWithGene = new Set(geneHpo.map(l => l.target));
+  const hpoLeaves = nodes.filter(d =>
+    d.type === "hpo" &&
+    d.depth != null &&
+    hpoWithGene.has(d.id) &&
+    !hpoChildren.has(d.id)
+  );
+
+  // distribuzione orizzontale locale
+  function layoutLocal(list, cx) {
+    const spread = Math.max(120, (list.length - 1) * 20);
+    list.forEach((d,i) => {
+      const t = list.length === 1 ? 0.5 : i / (list.length - 1);
+      d.x = cx - spread/2 + t*spread;
+    });
+  }
+
+  // distribuisce X per gerarchia
+  function layoutHierarchyLocal(list, cx) {
+    const byDepth = d3.group(list, d => d.depth ?? 0);
+    byDepth.forEach(level => {
+      const spread = Math.max(80, (level.length - 1) * 26);
+      level.forEach((d,i) => {
+        const t = level.length === 1 ? 0.5 : i / (level.length - 1);
+        d.x = cx - spread/2 + t*spread;
+      });
+    });
+  }
+
+  // distribuisce le foglie HPO
+  function layoutHPOLeaves(list, centerX = w/2) {
+    const byDepth = d3.group(list, d => d.depth ?? 0);
+    byDepth.forEach((group) => {
+      const spread = Math.max(260, (group.length - 1) * 36);
+      group.forEach((d,i) => {
+        const t = group.length === 1 ? 0.5 : i / (group.length - 1);
+        d.x = centerX - spread/2 + t*spread;
+        d.y = d.baseY;
+      });
+    });
+  }
+
+  layoutHPOLeaves(hpoLeaves);
+
+  let mode = "overview"; 
+  let currentState = {
+    hpoId: null,
+    hpoVisited: new Set(),
+    genes: new Set(),
+    directGOs: new Set(),
+    goHierarchy: new Set(),
+    goVisited: new Set()
+  };
+
+
+  // creazione link e nodi
+  const linkH = g.selectAll(".lh")
+    .data(hierarchy).enter().append("line")
+    .attr("stroke", d => d.rel === "is_a" ? "var(--is-a)" : "var(--part-of)")
+    .attr("stroke-width", 1)
+    .attr("opacity", 0.7)
+    .style("display","none");
+
+  const linkGH = g.selectAll(".lgh")
+    .data(geneHpo).enter().append("line")
+    .attr("stroke","var(--gene-hpo)")
+    .attr("opacity",0.7)
+    .style("display","none");
+
+  const linkGG = g.selectAll(".lgg")
+    .data(geneGo).enter().append("line")
+    .attr("stroke","var(--gene-go)")
+    .attr("opacity",0.7)
+    .style("display","none");
+
+  const node = g.selectAll(".node")
+    .data(nodes).enter().append("circle")
+    .attr("class", d => `node ${d.type}`)
+    .attr("r", 4)
+    .attr("fill", d => d.type==="hpo" ? "var(--hpo)" : d.type==="gene" ? "var(--gene)" : "var(--go)")
+    .style("display", d => hpoLeaves.includes(d) ? null : "none");
+
+  bindCommonTooltip(node);
+
+  // aggiornamento posizioni e colori
+  function update() {
+    node.attr("cx", d => d.x).attr("cy", d => d.y);
+
+    [linkH, linkGH, linkGG].forEach(sel => {
+      sel.attr("x1", d => byId.get(d.source)?.x)
+         .attr("y1", d => byId.get(d.source)?.y)
+         .attr("x2", d => byId.get(d.target)?.x)
+         .attr("y2", d => byId.get(d.target)?.y);
+    });
+  }
+
+  //click su hpo per espansione gerarchia
+  function expandFromHPO(hpo) {
+    mode = "expandedFromHPO";
+    currentState.goHierarchy = new Set();
+
+    node.classed("hierarchy", false);
+    node.style("display", "none");
+    linkH.style("display", "none");
+    linkGH.style("display", "none");
+    linkGG.style("display", "none");
+
+    //BFS HPO verso root
+    const visited = new Set();
+    const q = [hpo.id];
+    while (q.length) {
+      const c = q.shift();
+      if (visited.has(c)) continue;
+      visited.add(c);
+
+      (parents.get(c) || []).forEach(l => {
+        const p = byId.get(l.target);
+        if (p && p.type === "hpo") q.push(l.target);
+      });
+    }
+
+    // layout gerarchia HPO (sinistra del pivot)
+    const start = byId.get(hpo.id);
+    const fixedX = start.x;
+
+    const hierarchyNodes = nodes.filter(d => d.type==="hpo" && visited.has(d.id) && d.id !== hpo.id);
+    hierarchyNodes.forEach(d => { d.y = d.baseY; });
+    layoutHierarchyLocal(hierarchyNodes, fixedX - 160);
+
+    start.x = fixedX;
+    start.y = start.baseY;
+
+    // geni diretti dell'hpo
+    const genes = (genesByHpo.get(hpo.id) || []).map(l => byId.get(l.source)).filter(Boolean);
+    genes.forEach(d => { d.y = d.baseY; });
+    layoutLocal(genes, fixedX);
+
+    // go diretti derivati dai geni
+    const goSet = new Set();
+    genes.forEach(geneNode => {
+      (gosByGene.get(geneNode.id) || []).forEach(l => goSet.add(l.target));
+    });
+
+    const gos = [...goSet].map(id => byId.get(id)).filter(Boolean);
+    gos.forEach(d => { d.y = d.baseY; });
+    layoutHierarchyLocal(gos, fixedX);
+
+    // rende visibili i nodi
+    node.style("display", d => {
+      if (d.type==="hpo" && visited.has(d.id)) return null;
+      if (d.type==="gene" && genes.some(g => g.id === d.id)) return null;
+      if (d.type==="go" && goSet.has(d.id)) return null;
+      return "none";
+    });
+
+    node.classed("hierarchy", d => d.type==="hpo" && visited.has(d.id) && d.id !== hpo.id);
+
+    // rende visibili i link
+    linkH.style("display", l => {
+      const s = byId.get(l.source), t = byId.get(l.target);
+      if (!s || !t) return "none";
+      return (s.type==="hpo" && t.type==="hpo" && visited.has(s.id) && visited.has(t.id)) ? null : "none";
+    });
+
+    linkGH.style("display", l => l.target === hpo.id ? null : "none");
+
+    const geneIds = new Set(genes.map(d => d.id));
+    linkGG.style("display", l => geneIds.has(l.source) ? null : "none");
+
+    // salva stato corrente
+    currentState.hpoId = hpo.id;
+    currentState.hpoVisited = visited;
+    currentState.genes = geneIds;
+    currentState.directGOs = new Set(gos.map(d => d.id));
+    currentState.goVisited = new Set();
+
+    update();
+  }
+
+  // espande gerarchia GO da un GO selezionato
+  function expandFromGO(go) {
+    if (mode !== "expandedFromHPO") return;
+
+    const isVisibleGo = currentState.directGOs.has(go.id) || (currentState.goHierarchy?.has(go.id));
+    if (!isVisibleGo) return;
+
+    // BFS GO verso root
+    const visitedGo = new Set();
+    const q = [go.id];
+    while (q.length) {
+      const c = q.shift();
+      if (visitedGo.has(c)) continue;
+      visitedGo.add(c);
+
+      (parents.get(c) || []).forEach(l => {
+        const p = byId.get(l.target);
+        if (p && p.type === "go") q.push(l.target);
+      });
+    }
+
+    //aggiorna stato corrente
+    currentState.goVisited = visitedGo;
+
+    const hierarchyGO = nodes.filter(d =>
+      d.type === "go" &&
+      visitedGo.has(d.id) &&
+      d.id !== go.id &&
+      !currentState.directGOs.has(d.id)
+    );
+
+    currentState.goHierarchy = new Set(hierarchyGO.map(d => d.id));
+
+    // posizionamento gerarchia GO (desta del pivot)
+    const fixedX = go.x;
+    const fixedY = go.y;
+
+    hierarchyGO.forEach(d => { d.y = d.baseY; });
+    layoutHierarchyLocal(hierarchyGO, fixedX + 160);
+
+    go.x = fixedX;
+    go.y = fixedY;
+
+    // marca gerarchie (hpo e go)
+    node.classed("hierarchy", d =>
+      (d.type==="hpo" && currentState.hpoVisited.has(d.id) && d.id !== currentState.hpoId) ||
+      (d.type==="go" && currentState.goHierarchy.has(d.id))
+    );
+
+    //visibilità nodi
+    node.style("display", d => {
+      if (d.type==="hpo" && currentState.hpoVisited.has(d.id)) return null;
+      if (d.type==="gene" && currentState.genes.has(d.id)) return null;
+
+      if (d.type==="go") {
+        if (currentState.directGOs.has(d.id)) return null;
+        if (d.id === go.id) return null;
+        if (currentState.goHierarchy.has(d.id)) return null;
+      }
+      return "none";
+    });
+
+    // link visibili
+    linkGH.style("display", l => l.target === currentState.hpoId ? null : "none");
+    linkGG.style("display", l => currentState.genes.has(l.source) ? null : "none");
+
+    linkH.style("display", l => {
+      const s = byId.get(l.source), t = byId.get(l.target);
+      if (!s || !t) return "none";
+
+      if (s.type==="hpo" && t.type==="hpo") {
+        return (currentState.hpoVisited.has(s.id) && currentState.hpoVisited.has(t.id)) ? null : "none";
+      }
+      if (s.type==="go" && t.type==="go") {
+        return (visitedGo.has(s.id) && visitedGo.has(t.id)) ? null : "none";
+      }
+      return "none";
+    });
+
+    // aggiorna disegno
+    update();
+  }
+
+  // reset alla overview iniziale
+  function resetToOverview() {
+    mode = "overview";
+    currentState = {
+      hpoId: null,
+      hpoVisited: new Set(),
+      genes: new Set(),
+      directGOs: new Set(),
+      goHierarchy: new Set(),
+      goVisited: new Set()
+    };
+
+    node.classed("selected", false).classed("hierarchy", false);
+    activeLabel.text("—");
+
+    nodes.forEach(d => { d.x = d.baseX; d.y = d.baseY; });
+    layoutHPOLeaves(hpoLeaves);
+
+    node.style("display", d => hpoLeaves.includes(d) ? null : "none");
+    linkH.style("display", "none");
+    linkGH.style("display", "none");
+    linkGG.style("display", "none");
+
+    update();
+  }
+
+  // handler eventi nodi + sfondo
+  node.on("click", (e,d) => {
+    e.stopPropagation();
+    node.classed("selected", false);
+    d3.select(e.currentTarget).classed("selected", true);
+    activeLabel.text(d.id);
+
+    if (d.type === "hpo") expandFromHPO(d);
+    else if (d.type === "go") expandFromGO(d);
+  });
+
+  svg.on("click", e => { if (e.target === svg.node()) resetToOverview(); });
+
+  update();
+}
+
+/*  UI EVENTS */
+
+// cambia ontologia
+document.getElementById("segOnt").addEventListener("click", (e) => {
+  const btn = e.target.closest(".pill");
+  if (!btn) return;
+  const ont = btn.dataset.ont;
+  if (!ont || ont === current.ont) return;
+  current.ont = ont;
+  render();
+});
+
+// cambia modalità
+document.getElementById("segMode").addEventListener("click", (e) => {
+  const btn = e.target.closest(".pill");
+  if (!btn) return;
+  const mode = btn.dataset.mode;
+  if (!mode || mode === current.mode) return;
+  current.mode = mode;
+  render();
+});
+
+// sincronizza lo stato dei toggle tema ai bottoni
+function syncThemeUI() {
+  const isLight = document.body.classList.contains("light");
+  document.querySelectorAll("#segTheme .pill").forEach(b => {
+    b.classList.toggle("active", b.dataset.theme === (isLight ? "light" : "dark"));
+  });
+}
+
+// cambia tema
+document.getElementById("segTheme").addEventListener("click", (e) => {
+  const btn = e.target.closest(".pill");
+  if (!btn) return;
+
+  const theme = btn.dataset.theme; // "dark" | "light"
+  document.body.classList.toggle("light", theme === "light");
+  syncThemeUI();
+});
+
+
+// re-render on resize (mantieni coerenza layout)
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => render(), 120);
+});
+
+/* PRIMO RENDER */
+setHelp();
+syncThemeUI();
+render();
+</script>
+
+<div id="loader" class="loader hidden" aria-live="polite" aria-busy="true">
+  <div class="loader-card">
+    <div class="spinner" aria-hidden="true"></div>
+    <div class="loader-text" id="loaderText">Caricamento…</div>
+    <div class="loader-sub" id="loaderSub">—</div>
+  </div>
+</div>
+
+
+</body>
+</html>
